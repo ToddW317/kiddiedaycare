@@ -703,7 +703,7 @@ export default function Homepage() {
   )
 }
 
-export function KiddieDaycare_3dLanding() {
+export default function KiddieDaycare_3dLanding() {
   const { width } = useWindowSize();
   const isMobile = width < 768;
   

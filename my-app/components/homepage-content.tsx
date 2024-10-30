@@ -6,7 +6,7 @@ import { Textarea } from "@/components/ui/textarea"
 import { Baby, Book, Palette, Send, Sun, Star, Moon, Clock, Users, Award, Smile, Heart, Coffee, Music } from 'lucide-react'
 import { useState } from 'react'
 
-export function HomepageContent() {
+export default function HomepageContent() {
   const [name, setName] = useState('')
   const [email, setEmail] = useState('')
   const [message, setMessage] = useState('')

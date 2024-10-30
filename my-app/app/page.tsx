@@ -1,7 +1,7 @@
 'use client'
 
-import { HomepageContent } from '@/components/homepage-content'
+import { KiddieDaycare_3dLanding } from '@/components/kiddie-daycare-3d-landing'
 
 export default function Home() {
-  return <HomepageContent />
+  return <KiddieDaycare_3dLanding />
 }

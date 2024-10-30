@@ -6,23 +6,17 @@ const nextConfig = {
   typescript: {
     ignoreBuildErrors: true,
   },
-  images: {
-    unoptimized: true
+  output: 'standalone',
+  experimental: {
+    appDir: true,
   },
-  webpack: (config) => {
-    config.module.rules.push({
-      test: /\.(mpwebm)$/,
-      use: {
-        loader: 'file-loader',
-        options: {
-          publicPath: '/_next/static/media/',
-          outputPath: 'static/media/',
-          name: '[name].[hash].[ext]',
-        },
-      },
-    });
-    return config;
-  },
+  webpack(config) {
+    config.experiments = {
+      ...config.experiments,
+      topLevelAwait: true,
+    }
+    return config
+  }
 };
 
 export default nextConfig;

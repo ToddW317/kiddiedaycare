@@ -1,3 +1,5 @@
+import { databases, appwriteConfig } from './config.js';
+
 document.addEventListener('DOMContentLoaded', function() {
     // Mobile menu functionality
     const mobileMenuBtn = document.querySelector('.mobile-menu-btn');
@@ -68,22 +70,106 @@ document.addEventListener('DOMContentLoaded', function() {
             }
         });
 
-        // Form submission
+        // Modified form submission with Appwrite
         registrationForm.addEventListener('submit', async (e) => {
             e.preventDefault();
             if (validateCurrentStep(currentStep)) {
                 try {
                     const formData = new FormData(registrationForm);
-                    // Add your form submission logic here
-                    console.log('Form submitted successfully');
-                    // Show success message
+                    
+                    // Create document object from form data
+                    const registrationData = {
+                        child: {
+                            firstName: formData.get('childFirstName'),
+                            lastName: formData.get('childLastName'),
+                            dateOfBirth: formData.get('childDOB'),
+                            gender: formData.get('childGender')
+                        },
+                        parent: {
+                            name: formData.get('parentName'),
+                            email: formData.get('parentEmail'),
+                            phone: formData.get('parentPhone'),
+                            address: formData.get('parentAddress')
+                        },
+                        emergency: {
+                            name: formData.get('emergencyName'),
+                            relationship: formData.get('emergencyRelation'),
+                            phone: formData.get('emergencyPhone')
+                        },
+                        medical: {
+                            doctorName: formData.get('doctorName'),
+                            doctorPhone: formData.get('doctorPhone'),
+                            allergies: formData.get('allergies'),
+                            medications: formData.get('medications'),
+                            conditions: formData.get('conditions')
+                        },
+                        consents: {
+                            photoInternal: formData.get('photoConsent') === 'on',
+                            socialMedia: formData.get('socialMediaConsent') === 'on',
+                            fieldTrips: formData.get('fieldTripConsent') === 'on'
+                        },
+                        pickupPersons: getPickupPersons(),
+                        registrationDate: new Date().toISOString(),
+                        status: 'pending'
+                    };
+
+                    // Submit to Appwrite
+                    const response = await databases.createDocument(
+                        appwriteConfig.databaseId,
+                        appwriteConfig.registrationCollectionId,
+                        'unique()',
+                        registrationData
+                    );
+
+                    console.log('Registration submitted successfully:', response);
                     showMessage('Registration submitted successfully!', 'success');
+                    
+                    // Optional: Send confirmation email
+                    await sendConfirmationEmail(registrationData.parent.email, registrationData);
+                    
+                    // Reset form after successful submission
+                    registrationForm.reset();
+                    currentStep = 1;
+                    updateFormSteps();
+                    updateProgressBar();
+                    updateNavigationButtons();
+
                 } catch (error) {
                     console.error('Error submitting form:', error);
                     showMessage('Error submitting form. Please try again.', 'error');
                 }
             }
         });
+
+        // Helper function to get pickup persons data
+        function getPickupPersons() {
+            const pickupPersons = [];
+            const pickupNames = document.getElementsByName('pickupName[]');
+            const pickupRelations = document.getElementsByName('pickupRelation[]');
+            const pickupPhones = document.getElementsByName('pickupPhone[]');
+
+            for (let i = 0; i < pickupNames.length; i++) {
+                if (pickupNames[i].value) {
+                    pickupPersons.push({
+                        name: pickupNames[i].value,
+                        relationship: pickupRelations[i].value,
+                        phone: pickupPhones[i].value
+                    });
+                }
+            }
+            return pickupPersons;
+        }
+
+        // Helper function to send confirmation email
+        async function sendConfirmationEmail(email, registrationData) {
+            try {
+                // Implement your email sending logic here
+                // You might want to use Appwrite Functions or a separate email service
+                console.log('Confirmation email sent to:', email);
+            } catch (error) {
+                console.error('Error sending confirmation email:', error);
+            }
+        }
 
         // Helper functions
         function updateFormSteps() {

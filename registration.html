@@ -8,6 +8,10 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Quicksand:wght@400;600&display=swap" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/appwrite@16.0.2"></script>
+    <script>
+        const { Client, Databases, Account } = Appwrite;
+    </script>
 </head>
 <body>
     <header>
@@ -23,6 +27,9 @@
                 <li><a href="index.html#schedule">Schedule</a></li>
                 <li><a href="registration.html" class="register-btn active">Register</a></li>
                 <li><a href="index.html#contact">Contact</a></li>
+                <li class="auth-link">
+                    <a href="login.html">Login</a>
+                </li>
             </ul>
             <div class="mobile-menu-btn">
                 <span></span>

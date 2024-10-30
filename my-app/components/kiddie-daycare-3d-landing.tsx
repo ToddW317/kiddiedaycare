@@ -9,6 +9,7 @@ import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
 import { Baby, Book, Palette, Send, Sun, Star, Moon, Clock, Users, Award, Smile, Heart, Coffee, Music } from 'lucide-react'
 import { Mesh, Group, Material, BufferGeometry } from 'three'
+import HomepageContent from '@/components/homepage-content'
 
 const colors = [
   '#FF6B6B', // Warm red
@@ -779,7 +780,7 @@ export function KiddieDaycare_3dLanding() {
           position: showHomepage ? 'relative' : 'fixed'
         }}
       >
-        <Homepage />
+        <HomepageContent />
       </div>
 
       {/* 3D Scene overlay */}

@@ -1,15 +1,16 @@
 'use client'
 
-import { useState, useRef } from 'react'
-import { Canvas, useFrame } from '@react-three/fiber'
-import { Box, RoundedBox } from '@react-three/drei'
-import { Vector3, Quaternion, Euler } from 'three'
+import { useState, useRef, useEffect } from 'react'
+import { Canvas, useFrame, useThree } from '@react-three/fiber'
+import { Box, RoundedBox, Drag, Html } from '@react-three/drei'
+import { Vector3, Quaternion, Euler, BoxGeometry, BufferGeometry } from 'three'
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
 import { Baby, Book, Palette, Send, Sun, Star, Moon, Clock, Users, Award, Smile, Heart, Coffee, Music } from 'lucide-react'
 import { OrbitControls } from "@react-three/drei";
-import { Mesh, Group, Material, BufferGeometry } from 'three'
+import { Mesh, Group, Material } from 'three'
+import { DragControls } from 'three/examples/jsm/controls/DragControls'
 
 const colors = [
   '#FF6B6B', // Warm red
@@ -58,19 +59,20 @@ function Block({ position, color, parentRotation }: BlockProps) {
 
 interface PyramidProps {
   onReveal: () => void
+  isMobile: boolean
 }
 
-function Pyramid({ onReveal }: PyramidProps) {
+function Pyramid({ onReveal, isMobile }: PyramidProps) {
   const groupRef = useRef<Group>(null)
   const rotationRef = useRef({ x: 0, y: 0 })
   const [isAnimating, setIsAnimating] = useState(false)
   
-  // Adjusted positions for tighter stacking
+  // Adjusted positions to form a more traditional pyramid shape
   const positions = [
-    [0, 0.9, 0],       // Top block - lowered closer to base
-    [-0.52, 0, -0.3],  // Bottom left - moved closer to center
-    [0.52, 0, -0.3],   // Bottom right - moved closer to center
-    [0, 0, 0.6]        // Bottom back - moved closer to center
+    [0, 0.866, 0],       // Top block - moved up using sqrt(3)/2 for equilateral triangle height
+    [-0.5, 0, -0.289],   // Bottom left  - forms equilateral triangle base
+    [0.5, 0, -0.289],    // Bottom right - forms equilateral triangle base
+    [0, 0, 0.577]        // Bottom back  - forms equilateral triangle base
   ]
 
   // Continuous rotation animation
@@ -153,7 +155,13 @@ function Pyramid({ onReveal }: PyramidProps) {
   }
 
   return (
-    <group ref={groupRef} onClick={handleClick}>
+    <group 
+      ref={groupRef} 
+      onClick={handleClick} 
+      position={isMobile ? [0, 2.9, 0] : [3.5, 2.75, 0]}
+      scale={isMobile ? .3 : .5}
+      rotation={[0.3, 0, 0]} // Slight tilt to better show pyramid shape
+    >
       {positions.map((position, index) => (
         <Block
           key={index}
@@ -166,16 +174,337 @@ function Pyramid({ onReveal }: PyramidProps) {
   )
 }
 
-interface SceneProps {
-  onReveal: () => void
+interface DraggableBlockProps {
+  position: [number, number, number]
+  color: string
+  shape: 'cube' | 'rectangle' | 'cylinder'
 }
 
-function Scene({ onReveal }: SceneProps) {
+function DraggableBlock({ position, color, shape }: DraggableBlockProps) {
+  const meshRef = useRef<Mesh>(null)
+  const [isDragging, setIsDragging] = useState(false)
+  const [currentPosition, setCurrentPosition] = useState(position)
+  const { camera, size } = useThree()
+  
+  const handlePointerDown = (e: any) => {
+    e.stopPropagation()
+    setIsDragging(true)
+    if (meshRef.current) {
+      meshRef.current.updateMatrixWorld()
+    }
+  }
+
+  const handlePointerUp = (e: any) => {
+    e.stopPropagation()
+    setIsDragging(false)
+  }
+
+  const handlePointerMove = (e: any) => {
+    if (isDragging && meshRef.current) {
+      e.stopPropagation()
+      
+      // Convert mouse/touch position to 3D space
+      const vec = new Vector3()
+      const pos = new Vector3()
+      
+      // Get normalized device coordinates
+      vec.set(
+        (e.clientX / size.width) * 2 - 1,
+        -(e.clientY / size.height) * 2 + 1,
+        0.5
+      )
+      
+      // Convert to world space
+      vec.unproject(camera)
+      vec.sub(camera.position).normalize()
+      const distance = -camera.position.z / vec.z
+      pos.copy(camera.position).add(vec.multiplyScalar(distance))
+      
+      // Update position
+      setCurrentPosition([pos.x, pos.y, 0])
+    }
+  }
+
+  useEffect(() => {
+    setCurrentPosition(position)
+  }, [position])
+
+  // Smaller geometry sizes
+  const getGeometry = () => {
+    switch(shape) {
+      case 'cylinder':
+        return <cylinderGeometry args={[0.3, 0.3, 0.6, 32]} />
+      case 'rectangle':
+        return <boxGeometry args={[1.2, 0.6, 0.6]} />
+      case 'cube':
+        return <boxGeometry args={[0.6, 0.6, 0.6]} />
+    }
+  }
+
+  return (
+    <mesh
+      ref={meshRef}
+      position={currentPosition}
+      onPointerDown={handlePointerDown}
+      onPointerUp={handlePointerUp}
+      onPointerMove={handlePointerMove}
+    >
+      {getGeometry()}
+      <meshStandardMaterial 
+        color={isDragging ? '#ffffff' : color}
+        roughness={0.8}
+        metalness={0}
+      />
+    </mesh>
+  )
+}
+
+interface TemplateBlock {
+  position: [number, number, number]
+  shape: 'cube' | 'rectangle' | 'cylinder'
+  color: string
+}
+
+interface BuildingTemplate {
+  name: string
+  preview: string // Could be an emoji or icon
+  blocks: TemplateBlock[]
+  requiredPieces: {
+    cube: number
+    rectangle: number
+    cylinder: number
+  }
+}
+
+// Define building templates
+const buildingTemplates: BuildingTemplate[] = [
+  {
+    name: "House",
+    preview: "🏠",
+    blocks: [
+      // Base
+      { position: [-0.6, 0, 0], shape: 'rectangle', color: '#FFD93D' },
+      { position: [0.6, 0, 0], shape: 'rectangle', color: '#FFD93D' },
+      // Walls
+      { position: [-0.6, 0.6, 0], shape: 'cube', color: '#FF6B6B' },
+      { position: [0.6, 0.6, 0], shape: 'cube', color: '#FF6B6B' },
+      // Roof
+      { position: [0, 1.2, 0], shape: 'rectangle', color: '#4ECDC4' },
+    ],
+    requiredPieces: {
+      cube: 2,
+      rectangle: 3,
+      cylinder: 0
+    }
+  },
+  {
+    name: "Swan",
+    preview: "🦢",
+    blocks: [
+      // Body
+      { position: [-0.3, 0, 0], shape: 'rectangle', color: '#ffffff' },
+      // Neck
+      { position: [0.3, 0.3, 0], shape: 'cylinder', color: '#ffffff' },
+      // Head
+      { position: [0.6, 0.9, 0], shape: 'cube', color: '#ffffff' },
+      // Wing
+      { position: [-0.3, 0.6, 0], shape: 'rectangle', color: '#ffffff' },
+    ],
+    requiredPieces: {
+      cube: 1,
+      rectangle: 2,
+      cylinder: 1
+    }
+  },
+  {
+    name: "Boat",
+    preview: "⛵",
+    blocks: [
+      // Hull
+      { position: [0, 0, 0], shape: 'rectangle', color: '#4ECDC4' },
+      // Cabin
+      { position: [0, 0.6, 0], shape: 'cube', color: '#FF6B6B' },
+      // Mast
+      { position: [0, 1.2, 0], shape: 'cylinder', color: '#ffffff' },
+      // Sail
+      { position: [0.6, 0.9, 0], shape: 'rectangle', color: '#FFD93D' },
+    ],
+    requiredPieces: {
+      cube: 1,
+      rectangle: 2,
+      cylinder: 1
+    }
+  }
+]
+
+// Add a custom hook for detecting screen size
+function useWindowSize() {
+  const [windowSize, setWindowSize] = useState({
+    width: typeof window !== 'undefined' ? window.innerWidth : 0,
+    height: typeof window !== 'undefined' ? window.innerHeight : 0,
+  });
+
+  useEffect(() => {
+    function handleResize() {
+      setWindowSize({
+        width: window.innerWidth,
+        height: window.innerHeight,
+      });
+    }
+
+    window.addEventListener('resize', handleResize);
+    handleResize(); // Call on initial render
+    
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
+
+  return windowSize;
+}
+
+function BuildingArea() {
+  const { width } = useWindowSize();
+  const isMobile = width < 768;
+  
+  const [selectedTemplate, setSelectedTemplate] = useState<BuildingTemplate | null>(null)
+  const [showGuide, setShowGuide] = useState(true)
+  const [blocks, setBlocks] = useState<TemplateBlock[]>([])
+  
+  // Update the template ghost blocks in BuildingArea component
+  const defaultBlocks: TemplateBlock[] = isMobile ? [
+    // Top row blocks
+    { shape: 'cube', position: [-1.5, 2, 0] as [number, number, number], color: '#FF6B6B' },
+    { shape: 'cube', position: [0, 2, 0] as [number, number, number], color: '#FF6B6B' },
+    { shape: 'cube', position: [1.5, 2, 0] as [number, number, number], color: '#FF6B6B' },
+    
+    // Left side blocks - moved closer
+    { shape: 'rectangle', position: [-2, 0.5, 0] as [number, number, number], color: '#4ECDC4' },
+    { shape: 'rectangle', position: [-2, -0.5, 0] as [number, number, number], color: '#4ECDC4' },
+    
+    // Right side blocks - moved closer
+    { shape: 'cylinder', position: [2, 0.5, 0] as [number, number, number], color: '#FFD93D' },
+    { shape: 'cylinder', position: [2, -0.5, 0] as [number, number, number], color: '#FFD93D' },
+    
+    // Bottom row blocks
+    { shape: 'cube', position: [-1.5, -2, 0] as [number, number, number], color: '#95E1D3' },
+    { shape: 'rectangle', position: [0, -2, 0] as [number, number, number], color: '#95E1D3' },
+    { shape: 'cylinder', position: [1.5, -2, 0] as [number, number, number], color: '#95E1D3' },
+  ] : [
+    // Desktop positions - closer to building area
+    { shape: 'cube', position: [-3.5, 1, 0] as [number, number, number], color: '#FF6B6B' },
+    { shape: 'cube', position: [-3.5, 0, 0] as [number, number, number], color: '#FF6B6B' },
+    { shape: 'cube', position: [-3.5, -1, 0] as [number, number, number], color: '#FF6B6B' },
+    { shape: 'rectangle', position: [3.5, 1, 0] as [number, number, number], color: '#4ECDC4' },
+    { shape: 'rectangle', position: [3.5, 0, 0] as [number, number, number], color: '#4ECDC4' },
+    { shape: 'rectangle', position: [3.5, -1, 0] as [number, number, number], color: '#4ECDC4' },
+    { shape: 'cylinder', position: [-1, 2.8, 0] as [number, number, number], color: '#FFD93D' },
+    { shape: 'cylinder', position: [0, 2.8, 0] as [number, number, number], color: '#FFD93D' },
+    { shape: 'cylinder', position: [1, 2.8, 0] as [number, number, number], color: '#FFD93D' },
+    { shape: 'cube', position: [-1, -2.8, 0] as [number, number, number], color: '#95E1D3' },
+    { shape: 'rectangle', position: [0, -2.8, 0] as [number, number, number], color: '#95E1D3' },
+    { shape: 'cylinder', position: [1, -2.8, 0] as [number, number, number], color: '#95E1D3' },
+  ];
+
+  // Initialize blocks
+  useEffect(() => {
+    setBlocks(defaultBlocks)
+  }, [isMobile]) // Re-initialize when screen size changes
+
+  const handleTemplateSelect = (template: BuildingTemplate) => {
+    setSelectedTemplate(template)
+    setShowGuide(true)
+    setBlocks(defaultBlocks)
+  }
+
+  return (
+    <group>
+      <Html
+        position={isMobile ? [-1.75, -2.75, 0] : [-4.5, 3.5, 0]}
+        style={{
+          width: isMobile ? '100%' : 'auto',
+          touchAction: 'none',
+          transform: isMobile ? 'scale(1)' : 'none',
+          zIndex: 1000
+        }}
+        center
+      >
+        <div className={`bg-black/50 backdrop-blur-sm p-2 rounded-lg shadow-lg ${
+          isMobile ? 'w-[90vw] max-w-[400px] mx-auto' : ''
+        }`}>
+          <h3 className="text-sm font-bold mb-2 text-center text-white">Templates</h3>
+          <div className="flex flex-row justify-start gap-2 overflow-x-auto pb-2 px-2">
+            {buildingTemplates.map((template, index) => (
+              <button
+                key={index}
+                onClick={() => handleTemplateSelect(template)}
+                className={`p-2 rounded whitespace-nowrap flex-shrink-0 ${
+                  selectedTemplate?.name === template.name
+                    ? 'bg-blue-500 text-white'
+                    : 'bg-gray-800 text-gray-200 hover:bg-gray-700'
+                } ${isMobile ? 'min-w-[100px]' : ''}`}
+              >
+                <span className="mr-2">{template.preview}</span>
+                <span className="text-sm">{template.name}</span>
+              </button>
+            ))}
+          </div>
+        </div>
+      </Html>
+
+      {/* Building area boundary */}
+      <mesh position={[0, 0, -0.1]}>
+        <planeGeometry args={[isMobile ? 4 : 5, isMobile ? 4 : 5]} />
+        <meshStandardMaterial color="#1a1a1a" opacity={0.3} transparent />
+      </mesh>
+
+      {/* Template guide overlay */}
+      {selectedTemplate && showGuide && (
+        <group>
+          {selectedTemplate.blocks.map((block, index) => (
+            <mesh key={index} position={block.position}>
+              {block.shape === 'cylinder' ? (
+                <cylinderGeometry args={[0.3, 0.3, 0.6, 32]} />
+              ) : block.shape === 'rectangle' ? (
+                <boxGeometry args={[1.2, 0.6, 0.6]} />
+              ) : (
+                <boxGeometry args={[0.6, 0.6, 0.6]} />
+              )}
+              <meshStandardMaterial
+                color={block.color}
+                opacity={0.3}
+                transparent
+                wireframe
+              />
+            </mesh>
+          ))}
+        </group>
+      )}
+
+      {/* Available blocks */}
+      {blocks.map((block, index) => (
+        <DraggableBlock
+          key={index}
+          position={block.position}
+          color={block.color}
+          shape={block.shape}
+        />
+      ))}
+    </group>
+  )
+}
+
+interface SceneProps {
+  onReveal: () => void
+  isMobile: boolean
+}
+
+function Scene({ onReveal, isMobile }: SceneProps) {
   return (
     <>
+      <color attach="background" args={['#1a1a1a']} />
       <ambientLight intensity={0.5} />
       <pointLight position={[10, 10, 10]} intensity={1.5} />
-      <Pyramid onReveal={onReveal} />
+      <BuildingArea />
+      <Pyramid onReveal={onReveal} isMobile={isMobile} />
     </>
   )
 }
@@ -376,6 +705,9 @@ export default function Homepage() {
 }
 
 export function KiddieDaycare_3dLanding() {
+  const { width } = useWindowSize();
+  const isMobile = width < 768;
+  
   const [showHomepage, setShowHomepage] = useState(false)
   const [opacity, setOpacity] = useState(0)
   const [transitionText, setTransitionText] = useState("Click the pyramid to enter")
@@ -384,48 +716,122 @@ export function KiddieDaycare_3dLanding() {
   const handleReveal = () => {
     setIsTransitioning(true)
     setTransitionText("Welcome to our magical daycare! ✨")
-    setShowHomepage(true)
+    
+    // Remove all fixed positioning and constraints
+    document.documentElement.style.removeProperty('position')
+    document.documentElement.style.removeProperty('overflow')
+    document.documentElement.style.removeProperty('width')
+    document.documentElement.style.removeProperty('height')
+    document.body.style.removeProperty('position')
+    document.body.style.removeProperty('overflow')
+    document.body.style.removeProperty('width')
+    document.body.style.removeProperty('height')
+    
+    // Show homepage with a slight delay
     setTimeout(() => {
+      setShowHomepage(true)
       setOpacity(1)
-    }, 1000)
+      
+      // Explicitly enable scrolling
+      document.body.style.overflow = 'auto'
+      document.documentElement.style.overflow = 'auto'
+      window.scrollTo(0, 0)
+    }, 100)
   }
 
+  useEffect(() => {
+    const enableScroll = () => {
+      if (showHomepage) {
+        document.body.style.overflow = 'auto'
+        document.documentElement.style.overflow = 'auto'
+      }
+    }
+
+    if (!showHomepage) {
+      // Only set fixed positioning before reveal
+      document.documentElement.style.position = 'fixed'
+      document.documentElement.style.overflow = 'hidden'
+      document.body.style.position = 'fixed'
+      document.body.style.overflow = 'hidden'
+    } else {
+      // Add click listener to re-enable scroll if needed
+      document.addEventListener('click', enableScroll)
+    }
+
+    return () => {
+      // Cleanup
+      document.removeEventListener('click', enableScroll)
+      document.documentElement.style.removeProperty('position')
+      document.documentElement.style.removeProperty('overflow')
+      document.body.style.removeProperty('position')
+      document.body.style.removeProperty('overflow')
+      document.body.style.overflow = 'auto'
+      document.documentElement.style.overflow = 'auto'
+    }
+  }, [showHomepage])
+
   return (
-    <div className="w-full h-screen relative bg-gray-900">
-      {/* Homepage with initial opacity 0 */}
+    <div className="min-h-screen">
+      {/* Homepage Content */}
       <div 
-        className="absolute inset-0 transition-opacity duration-1000"
-        style={{ opacity: opacity }}
+        className={`w-full transition-opacity duration-1000`}
+        style={{ 
+          opacity: opacity,
+          display: showHomepage ? 'block' : 'none',
+          position: showHomepage ? 'relative' : 'fixed'
+        }}
       >
         <Homepage />
       </div>
 
       {/* 3D Scene overlay */}
       <div 
-        className={`absolute inset-0 transition-opacity duration-1000 ${showHomepage ? 'pointer-events-none' : ''}`}
-        style={{ opacity: showHomepage ? 0 : 1 }}
+        className={`fixed inset-0 w-full h-screen transition-opacity duration-1000 ${
+          showHomepage ? 'pointer-events-none' : ''
+        }`}
+        style={{ 
+          opacity: showHomepage ? 0 : 1,
+          zIndex: showHomepage ? -1 : 1
+        }}
       >
         <Canvas 
+          className="w-full h-full touch-none"
           camera={{ 
-            position: [0, 2, 8],
-            fov: 45,
+            position: isMobile ? [0, 0, 10] : [0, 0, 10],
+            fov: isMobile ? 70 : 45,
             near: 0.1,
             far: 1000
           }}
         >
-          <Scene onReveal={handleReveal} />
+          <Scene onReveal={handleReveal} isMobile={isMobile} />
           <OrbitControls 
             enableZoom={false}
             enablePan={false}
             enableRotate={false}
           />
         </Canvas>
-        <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-          <p className={`text-white text-2xl ${isTransitioning ? 'animate-bounce' : 'animate-pulse'}`}>
+        <div className="absolute top-4 left-0 right-0 flex justify-center pointer-events-none">
+          <p className={`text-white text-shadow-lg ${isMobile ? 'text-lg' : 'text-2xl'} text-center px-4 ${
+            isTransitioning ? 'animate-bounce' : 'animate-pulse'
+          }`}>
             {transitionText}
           </p>
         </div>
       </div>
     </div>
   )
+}
+
+// Add this to your globals.css or create a new style tag
+const styles = `
+  .text-shadow-lg {
+    text-shadow: 0 2px 4px rgba(0,0,0,0.5);
+  }
+`;
+
+// Add style tag to document
+if (typeof document !== 'undefined') {
+  const styleSheet = document.createElement("style");
+  styleSheet.innerText = styles;
+  document.head.appendChild(styleSheet);
 }

@@ -2,15 +2,13 @@
 
 import { useState, useRef, useEffect } from 'react'
 import { Canvas, useFrame, useThree } from '@react-three/fiber'
-import { Box, RoundedBox, Drag, Html } from '@react-three/drei'
-import { Vector3, Quaternion, Euler, BoxGeometry, BufferGeometry } from 'three'
+import { RoundedBox, Html, OrbitControls } from '@react-three/drei'
+import { Vector3, Quaternion, Euler } from 'three'
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
 import { Baby, Book, Palette, Send, Sun, Star, Moon, Clock, Users, Award, Smile, Heart, Coffee, Music } from 'lucide-react'
-import { OrbitControls } from "@react-three/drei";
-import { Mesh, Group, Material } from 'three'
-import { DragControls } from 'three/examples/jsm/controls/DragControls'
+import { Mesh, Group, Material, BufferGeometry } from 'three'
 
 const colors = [
   '#FF6B6B', // Warm red
